@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>天気</title>
+    
+   <style>
+    body {
+        font-family: Arial, sans-serif;
+        margin: 0;
+        padding: 0;
+        display: flex;
+        height: 100vh;
+        overflow: hidden;
+    }
+
+    .left-content {
+        flex: 0.5;
+        background-color: #f0f0f0;
+        padding: 10px;
+        overflow-y: auto;
+        border-right: 1px solid #ccc;
+    }
+
+    .favorites-weather-container {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        align-items: center;
+    }
+
+    .favorites-weather-item {
+        width: 120px;
+        padding: 8px;
+        text-align: center;
+        background-color: white;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+
+    .favorites-weather-item img {
+        width: 40px;
+        height: 40px;
+    }
+
+    .main-content {
+        flex: 3;
+        display: flex;
+        flex-direction: column; /* 세로 정렬 */
+        align-items: center; /* 가로로 가운데 정렬 */
+        justify-content: center; /* 세로로 가운데 정렬 */
+        gap: 20px; /* 요소 간 간격 */
+        padding: 20px;
+    }
+
+    .search-container {
+        width: 100%;
+        text-align: center;
+    }
+
+    .search-input {
+        width: 300px;
+        padding: 10px;
+        font-size: 1em;
+    }
+
+    .search-button {
+        padding: 10px 20px;
+        font-size: 1em;
+        cursor: pointer;
+    }
+
+    .current-weather-container {
+        text-align: center;
+    }
+
+    .hourly-weather-container {
+        display: flex;
+        justify-content: center;
+        gap: 10px;
+        overflow-x: auto;
+        padding: 10px;
+        border: 1px solid #ccc;
+        border-radius: 8px;
+        max-width: 90%;
+    }
+
+    .hourly-weather-item {
+        flex-shrink: 0;
+        width: 80px;
+        text-align: center;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        padding: 5px;
+    }
+
+    .right-content {
+        flex: 0.5;
+        background-color: #f5f5f5;
+        padding: 10px;
+        overflow-y: auto;
+        border-left: 1px solid #ccc;
+    }
+    .favorites-button {
+            padding: 10px 20px;
+            font-size: 1em;
+            cursor: pointer;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            text-align: center;
+        }
+
+        .favorites-button:hover {
+            background-color: #0056b3;
+        }
+</style>
+
+</head>
+<body>
+<div class="left-content">
+    <h2>お気に入りの天気</h2>
+    <div id="favorites-weather-container" class="favorites-weather-container"></div>
+</div>
+<div class="main-content">
+    <div class="search-container">
+        <input type="text" id="location-input" class="search-input" placeholder="地域を入力してください">
+        <button id="search-button" class="search-button">検索</button>
+    </div>
+    <div id="current-location"></div>
+    <div id="current-weather-container" class="current-weather-container">
+        <h2>現在の天気</h2>
+        <div id="current-weather" class="current-weather"></div>
+    </div>
+    <h2>時間別の天気</h2>
+    <div id="hourly-weather-container" class="hourly-weather-container"></div>
+    <button id="favorites-button" class="favorites-button">お気に入りページへ</button>
+</div>
+<div class="right-content">
+    <h2>今週の天気</h2>
+    <div id="weekly-weather-container" class="weekly-weather-container"></div>
+</div>
+
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const hourlyWeatherContainer = document.getElementById('hourly-weather-container');
+    const weeklyWeatherContainer = document.getElementById('weekly-weather-container');
+    const currentWeather = document.getElementById('current-weather');
+    const currentLocation = document.getElementById('current-location');
+    const searchButton = document.getElementById('search-button');
+    const locationInput = document.getElementById('location-input');
+    const favoritesWeatherContainer = document.getElementById('favorites-weather-container');
+    const favoritesButton = document.getElementById('favorites-button');
+    let API_KEY = ''; // API 키 저장
+    let isFavoritesLoaded = false; // 중복 호출 방지 플래그
+
+    // API 키 가져오기
+    fetch('/api/key')
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('Failed to fetch API key');
+            }
+            return response.text();
+        })
+        .then(key => {
+            API_KEY = key;
+            console.log('API key loaded:', API_KEY);
+        })
+        .catch(error => {
+            console.error('Failed to fetch API key:', error);
+            alert('APIキーの取得に失敗しました。');
+        });
+
+    favoritesButton.addEventListener('click', () => {
+        window.location.href = '/favorites';
+    });
+
+    function loadFavoritesWeather() {
+        if (isFavoritesLoaded) return; // 이미 호출된 경우 실행하지 않음
+        isFavoritesLoaded = true; // 호출 플래그 설정
+
+        favoritesWeatherContainer.innerHTML = ''; // 기존 데이터 초기화
+
+        fetch('/api/favorites')
+            .then(response => response.json())
+            .then(favorites => {
+                if (favorites.length === 0) {
+                    favoritesWeatherContainer.innerHTML = '<p>お気に入りがありません。</p>';
+                    return;
+                }
+
+                favorites.forEach(favorite => {
+                    fetch(`https://api.openweathermap.org/data/2.5/forecast?q=${encodeURIComponent(favorite.cityName)}&appid=${API_KEY}&units=metric&lang=ja`)
+                        .then(response => response.json())
+                        .then(weatherData => {
+                            const currentWeather = weatherData.list[0];
+                            const cityBlock = document.createElement('div');
+                            cityBlock.className = 'favorites-weather-item';
+                            cityBlock.innerHTML = `
+                                <h4>${favorite.cityName}</h4>
+                                <img src="http://openweathermap.org/img/wn/${currentWeather.weather[0].icon}@2x.png" alt="天気">
+                                <div>${currentWeather.main.temp}°C</div>
+                                <div>${currentWeather.weather[0].description}</div>
+                            `;
+                            favoritesWeatherContainer.appendChild(cityBlock);
+                        })
+                        .catch(error => console.error(`Failed to fetch weather for ${favorite.cityName}:`, error));
+                });
+            })
+            .catch(error => {
+                console.error('Failed to load favorites:', error);
+            });
+    }
+
+    function renderWeather(data) {
+        const cityName = data.city.name;
+        currentLocation.innerHTML = `<h3>${cityName}</h3>`;
+
+        const currentItem = data.list[0];
+        currentWeather.innerHTML = `
+            <div>${currentItem.main.temp}°C</div>
+            <div>${currentItem.weather[0].description}</div>
+            <img src="http://openweathermap.org/img/wn/${currentItem.weather[0].icon}@2x.png" alt="天気アイコン">
+        `;
+
+        const hourlyWeatherItems = data.list.slice(0, 8).map(item => `
+            <div class="hourly-weather-item">
+                <div>${new Date(item.dt * 1000).toLocaleTimeString()}</div>
+                <img src="http://openweathermap.org/img/wn/${item.weather[0].icon}@2x.png" alt="天気">
+                <div>${item.main.temp}°C</div>
+            </div>
+        `).join('');
+        hourlyWeatherContainer.innerHTML = hourlyWeatherItems;
+
+        const weatherMap = {};
+        data.list.forEach(item => {
+            const date = new Date(item.dt * 1000).toLocaleDateString();
+            if (!weatherMap[date]) {
+                weatherMap[date] = {
+                    tempSum: 0,
+                    count: 0,
+                    weatherDescription: item.weather[0].description,
+                    iconCode: item.weather[0].icon
+                };
+            }
+            weatherMap[date].tempSum += item.main.temp;
+            weatherMap[date].count++;
+        });
+
+        const weeklyWeatherItems = Object.keys(weatherMap).slice(0, 6).map(date => {
+            const weatherInfo = weatherMap[date];
+            const averageTemp = (weatherInfo.tempSum / weatherInfo.count).toFixed(1);
+            const iconUrl = `http://openweathermap.org/img/wn/${weatherInfo.iconCode}@2x.png`;
+            return `
+                <div class="weekly-weather-item">
+                    <div>${date}</div>
+                    <img src="${iconUrl}" alt="天気">
+                    <div>${averageTemp}°C</div>
+                    <div>${weatherInfo.weatherDescription}</div>
+                </div>
+            `;
+        }).join('');
+        weeklyWeatherContainer.innerHTML = weeklyWeatherItems;
+    }
+
+    const selectedCity = sessionStorage.getItem('selectedCity');
+    if (selectedCity) {
+        fetch(`https://api.openweathermap.org/data/2.5/forecast?q=${encodeURIComponent(selectedCity)}&appid=${API_KEY}&units=metric&lang=ja`)
+            .then(response => response.json())
+            .then(data => {
+                sessionStorage.removeItem('selectedCity');
+                renderWeather(data);
+                loadFavoritesWeather();
+            })
+            .catch(error => console.error(`Failed to load weather for ${selectedCity}:`, error));
+    } else {
+        if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(
+                position => {
+                    const lat = position.coords.latitude;
+                    const lon = position.coords.longitude;
+                    fetch(`https://api.openweathermap.org/data/2.5/forecast?lat=${lat}&lon=${lon}&appid=${API_KEY}&units=metric&lang=ja`)
+                        .then(response => response.json())
+                        .then(data => renderWeather(data))
+                        .catch(error => console.error('Failed to fetch weather by location:', error));
+                },
+                error => console.error('Failed to get location:', error)
+            );
+        } else {
+            alert('位置情報サービスが利用できません。');
+        }
+        loadFavoritesWeather();
+    }
+
+    searchButton.addEventListener('click', () => {
+        const location = locationInput.value.trim();
+        if (!location) {
+            alert("地域を入力してください。");
+            return;
+        }
+
+        fetch(`https://api.openweathermap.org/data/2.5/forecast?q=${encodeURIComponent(location)}&appid=${API_KEY}&units=metric&lang=ja`)
+            .then(response => response.json())
+            .then(data => renderWeather(data))
+            .catch(error => {
+                console.error('天気情報を取得できませんでした:', error);
+                alert('天気情報を取得できませんでした。');
+            });
+    });
+
+    loadFavoritesWeather();
+});
+
+
+</script>
+
+</body>
+</html>

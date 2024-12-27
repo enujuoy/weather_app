@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>お気に入り</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f9f9f9;
+            color: #333;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            position: relative;
+        }
+
+        h1 {
+            margin-bottom: 20px;
+            color: #007bff;
+        }
+
+        .container {
+            background: #fff;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            width: 90%;
+            max-width: 500px;
+            position: relative; /* 자식 요소 위치 조정을 위한 설정 */
+            margin-bottom: 60px; /* 버튼을 위한 공간 확보 */
+        }
+
+        .add-favorite {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        #cityName {
+            flex: 1;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 1em;
+        }
+
+        button {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            font-size: 1em;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+
+        button:hover {
+            background-color: #0056b3;
+            color: #fff;
+        }
+
+        .add-favorite button {
+            background-color: #007bff;
+            color: white;
+        }
+
+        ul {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        li {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            background: #fefefe;
+            margin-bottom: 10px;
+            transition: box-shadow 0.3s;
+        }
+
+        li:hover {
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        li span {
+            cursor: pointer;
+            color: #007bff;
+        }
+
+        li span:hover {
+            text-decoration: underline;
+        }
+
+        li button {
+            background-color: #e74c3c;
+            color: white;
+            font-size: 0.9em;
+        }
+
+        /* 홈 버튼 스타일 */
+        .home-button {
+            position: absolute;
+            bottom: -50px; /* 컨테이너의 바로 아래에 위치 */
+            right: 0; /* 컨테이너의 오른쪽 끝에 정렬 */
+            background-color: #28a745;
+            color: white;
+            padding: 10px 20px;
+            border-radius: 5px;
+            font-size: 1em;
+            border: none;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+
+        .home-button:hover {
+            background-color: #218838;
+        }
+    </style>
+</head>
+<body>
+    <h1>お気に入り管理</h1>
+    <div class="container">
+        <div class="add-favorite">
+            <input type="text" id="cityName" placeholder="都市名">
+            <button onclick="addFavorite()">お気に入り追加</button>
+        </div>
+        <ul id="favorites-list"></ul>
+        <button class="home-button" onclick="goToHome()">ホームに戻る</button>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', loadFavorites);
+
+        // 브라우저 세션 ID 가져오기
+        const getSessionId = () => {
+            let sessionId = localStorage.getItem('SESSION_ID');
+            if (!sessionId) {
+                sessionId = generateSessionId();
+                localStorage.setItem('SESSION_ID', sessionId);
+            }
+            return sessionId;
+        };
+
+        const generateSessionId = () => {
+            return 'sess-' + Math.random().toString(36).substring(2) + Date.now();
+        };
+
+        const sessionId = getSessionId(); // 세션 ID 생성 또는 가져오기
+
+        async function loadFavorites() {
+            try {
+                const response = await fetch(`/api/favorites?sessionId=${sessionId}`);
+                if (!response.ok) throw new Error("データの読み込みに失敗しました。");
+
+                const data = await response.json();
+                const list = document.getElementById('favorites-list');
+                list.innerHTML = '';
+                data.forEach(favorite => {
+                    const listItem = document.createElement('li');
+                    const citySpan = document.createElement('span');
+                    citySpan.textContent = `${favorite.cityName}`;
+                    citySpan.onclick = () => handleCityClick(favorite.cityName);
+
+                    const deleteButton = document.createElement('button');
+                    deleteButton.textContent = "削除";
+                    deleteButton.onclick = () => deleteFavorite(favorite.cityName);
+
+                    listItem.appendChild(citySpan);
+                    listItem.appendChild(deleteButton);
+                    list.appendChild(listItem);
+                });
+            } catch (error) {
+                console.error('お気に入りの読み込みに失敗しました:', error);
+                alert('お気に入りの読み込みに失敗しました。再試行してください。');
+            }
+        }
+
+        async function addFavorite() {
+            const cityNameInput = document.getElementById('cityName').value.trim();
+
+            if (!cityNameInput) {
+                alert("都市名を入力してください。");
+                return;
+            }
+
+            if (!confirm(`「${cityNameInput}」をお気に入りに追加しますか？`)) {
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/favorites', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ sessionId, cityName: cityNameInput })
+                });
+                if (!response.ok) throw new Error("お気に入り追加に失敗しました。");
+
+                alert("お気に入りが追加されました。");
+                loadFavorites();
+            } catch (error) {
+                console.error(error);
+                alert('お気に入りの追加中にエラーが発生しました。');
+            }
+        }
+
+        async function deleteFavorite(cityName) {
+            if (!confirm(`「${cityName}」をお気に入りから削除しますか？`)) {
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/favorites', {
+                    method: 'DELETE',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ sessionId, cityName })
+                });
+                if (!response.ok) throw new Error("お気に入り削除に失敗しました。");
+
+                alert("お気に入りが削除されました。");
+                loadFavorites();
+            } catch (error) {
+                console.error(error);
+                alert('お気に入りの削除中にエラーが発生しました。');
+            }
+        }
+
+        // 추가된 기능: 도시 이름 클릭 이벤트 처리
+        function handleCityClick(cityName) {
+            sessionStorage.setItem('selectedCity', cityName); // 도시 이름을 저장
+            window.location.href = '/home'; // 홈 화면으로 이동
+        }
+
+        // 홈 버튼 클릭 이벤트
+        function goToHome() {
+            window.location.href = '/home';
+        }
+    </script>
+</body>
+</html>
