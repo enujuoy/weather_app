@@ -51,7 +51,22 @@ public class FavoriteService {
 
         favoriteRepository.save(favorite);
     }
+    public Map<String, Double> getCityCoordinates(String cityName) throws Exception {
+        String url = String.format(
+                "http://api.openweathermap.org/geo/1.0/direct?q=%s&limit=1&appid=%s",
+                cityName, apiKey);
 
+        Map[] response = restTemplate.getForObject(url, Map[].class);
+
+        if (response == null || response.length == 0) {
+            throw new Exception("도시 좌표를 가져오지 못했습니다.");
+        }
+
+        return Map.of(
+                "lat", (Double) response[0].get("lat"),
+                "lon", (Double) response[0].get("lon")
+        );
+    }
     // 즐겨찾기 조회
     public List<Favorite> getFavoritesBySessionId(String sessionId) {
         return favoriteRepository.findBySessionId(sessionId);
